@@ -18,13 +18,6 @@ Stephanie María Leitón Ramírez - B74106
 import math
 import streamlit as st
 import pandas as pd
-import geopandas as gpad
-import plotly.express as px
-import folium
-from folium import Marker
-from folium.plugins import MarkerCluster
-from folium.plugins import HeatMap
-
 from streamlit_folium import folium_static
 #
 # Configuración de la página
