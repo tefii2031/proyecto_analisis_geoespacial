@@ -159,38 +159,3 @@ Y los siguientes controles:
 * Control para activar y desactivar capas.
 * Escala
 """
-cantones_file = cantones_file.to_crs(4326)
-redvial_file = redvial_file.to_crs(4326)
-
-capa_mapa = redvial_x_canton_agrupados[['canton', 'densidad']]
-# Creación del mapa base
-mapa= folium.Map(
-    location=[9.8, -84], 
-    width=1000, height=1000, 
-    zoom_start=8,
-    control_scale=True,
-    tiles='Stamen Watercolor'
-    )
-
-#Añadir mapa de coropletas
-folium.Choropleth(
-    name="Densidad de la red vial en los cantones de Costa Rica",
-    geo_data=cantones_file,
-    data=capa_mapa,
-    columns=['canton', 'densidad'],
-    bins=8,
-    key_on='feature.properties.canton',
-    fill_color='Reds', 
-    fill_opacity=0.5, 
-    line_opacity=1,
-    legend_name='densidad',
-    smooth_factor=0 ).add_to(mapa)
-
-#añadir capa con las lineas de red vial
-folium.GeoJson(data=redvial_file, name='Red vial').add_to(mapa)
-
-# Control de capas
-folium.LayerControl().add_to(mapa)
-
-# Despliegue del mapa
-mapa
