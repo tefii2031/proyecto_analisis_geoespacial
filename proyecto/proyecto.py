@@ -18,7 +18,21 @@ Stephanie María Leitón Ramírez - B74106
 import math
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+
 #
 # Configuración de la página
 #
+st.set_page_config(layout='wide')
+
+
+"""
+## Obtención de datos
+Se usan las capas de Web Feature Service (WFS) publicadas por el Instituto Geográfico Nacional (IGN) en el Sistema Nacional de Información Territorial (SNIT):
+
+Límite cantonal 1:5000
+https://www.snitcr.go.cr/ico_servicios_ogc_info?k=bm9kbzo6MjY=&nombre=IGN%20Cartograf%C3%ADa%201:5mil
+ 
+Red vial 1:200000
+https://www.snitcr.go.cr/ico_servicios_ogc_info?k=bm9kbzo6NDI=&nombre=IGN%201:200mil
+
+"""
