@@ -18,7 +18,7 @@ Stephanie María Leitón Ramírez - B74106
 import math
 import streamlit as st
 import pandas as pd
-from streamlit_folium import folium_static
+
 #
 # Configuración de la página
 #
