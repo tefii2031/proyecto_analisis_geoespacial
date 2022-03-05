@@ -14,207 +14,170 @@ Stephanie María Leitón Ramírez - B74106
 
 ##Importando las bibliotecas
 """
+
 import math
-
 import streamlit as st
-
 import pandas as pd
-import geopandas as gpd
-
+import geopandas as gpad
 import plotly.express as px
-
 import folium
 from folium import Marker
 from folium.plugins import MarkerCluster
 from folium.plugins import HeatMap
+
 from streamlit_folium import folium_static
-
-
 #
 # Configuración de la página
 #
 st.set_page_config(layout='wide')
 
 
+"""
+## Obtención de datos
+Se usan las capas de Web Feature Service (WFS) publicadas por el Instituto Geográfico Nacional (IGN) en el Sistema Nacional de Información Territorial (SNIT):
+
+Límite cantonal 1:5000
+https://www.snitcr.go.cr/ico_servicios_ogc_info?k=bm9kbzo6MjY=&nombre=IGN%20Cartograf%C3%ADa%201:5mil
+ 
+Red vial 1:200000
+https://www.snitcr.go.cr/ico_servicios_ogc_info?k=bm9kbzo6NDI=&nombre=IGN%201:200mil
+
+"""
 #
-# TÍTULO Y DESCRIPCIÓN DE LA APLICACIÓN
+# Cargar datos
 #
-
-st.title('Visualización de datos de biodiversidad')
-st.markdown('Esta aplicación presenta visualizaciones tabulares, gráficas y geoespaciales de datos de biodiversidad que siguen el estándar [Darwin Core (DwC)](https://dwc.tdwg.org/terms/).')
-st.markdown('El usuario debe seleccionar un archivo CSV basado en el DwC y posteriormente elegir una de las especies con datos contenidos en el archivo. **El archivo debe estar separado por tabuladores**. Este tipo de archivos puede generarse, entre otras formas, en el portal de la [Infraestructura Mundial de Información en Biodiversidad (GBIF)](https://www.gbif.org/).')
-st.markdown('La aplicación mostrará un conjunto de tablas, gráficos y mapas correspondientes a la distribución de la especie en el tiempo y en el espacio.')
-
-
+redvial_file = gpad.read_file('../datos/redvial.geojson')
+cantones_file = gpad.read_file('../datos/cantones.geojson')
+#convertir capas
+redvial_file.to_crs(5367)
+cantones_file.to_crs(5367)
 #
-# ENTRADAS
+# Sidebar con filtro de categoria
 #
+lista_categorias = redvial_file.categoria.unique().tolist()
+lista_categorias.sort()
+filtro_categoria = st.sidebar.selectbox('Seleccione la categoría de red vial', lista_categorias)
 
-# Carga de datos
-# st.header('Carga de datos')
-archivo_registros_presencia = st.sidebar.file_uploader('Seleccione un archivo CSV que siga el estándar DwC')
+""" 
+## Tabla de datos
 
-# Se continúa con el procesamiento solo si hay un archivo de datos cargado
-if archivo_registros_presencia is not None:
-    # Carga de registros de presencia en un dataframe
-    registros_presencia = pd.read_csv(archivo_registros_presencia, delimiter='\t')
-    # Conversión del dataframe de registros de presencia a geodataframe
-    registros_presencia = gpd.GeoDataFrame(registros_presencia, 
-                                           geometry=gpd.points_from_xy(registros_presencia.decimalLongitude, 
-                                                                       registros_presencia.decimalLatitude),
-                                           crs='EPSG:4326')
+Se unen las tablas de Canton con la de Red Vial
 
-    # Carga de polígonos de ASP
-    asp = gpd.read_file("https://github.com/pf3311-cienciadatosgeoespaciales/2021-iii/raw/main/contenido/b/datos/asp.geojson")
+"""
+
+#Unir las capas con intersección espacial 
+redvial_x_canton = cantones_file.overlay(redvial_file, how='intersection', keep_geom_type=False)
+redvial_x_canton['longitud'] = redvial_x_canton['geometry'].length /1000
 
 
-    # Limpieza de datos
-    # Eliminación de registros con valores nulos en la columna 'species'
-    registros_presencia = registros_presencia[registros_presencia['species'].notna()]
-    # Cambio del tipo de datos del campo de fecha
-    registros_presencia["eventDate"] = pd.to_datetime(registros_presencia["eventDate"])
+# Group by de canton y categorias
+redvial_x_canton_agrupados = redvial_x_canton.groupby(['canton', 'categoria']).agg({'longitud': 'sum', 'area': 'min'})
+redvial_x_canton_agrupados = redvial_x_canton_agrupados.reset_index()
 
-    # Especificación de filtros
-    # st.header('Filtros de datos')
-    # Especie
-    lista_especies = registros_presencia.species.unique().tolist()
-    lista_especies.sort()
-    filtro_especie = st.sidebar.selectbox('Seleccione la especie', lista_especies)
+# Se separan las categorias como columnas al añadir un multinivel
+redvial_x_canton_agrupados = redvial_x_canton_agrupados.pivot_table('longitud', ['canton', 'area'], 'categoria')
 
+# reordenar columnas volviendo a un sólo nivel de columnas
+redvial_x_canton_agrupados.reset_index( drop=False, inplace=True )
+redvial_x_canton_agrupados.reindex(['CAMINO DE TIERRA','AUTOPISTA',
+                                        'CARRETERA PAVIMENTO DOS VIAS O MAS',
+                                        'CARRETERA PAVIMENTO UNA VIA',
+                                        'CARRETERA SIN PAVIMENTO DOS VIAS'], axis=1)
 
-    #
-    # PROCESAMIENTO
-    #
-
-    # Filtrado
-    registros_presencia = registros_presencia[registros_presencia['species'] == filtro_especie]
-
-    # Cálculo de la cantidad de registros en ASP
-    # "Join" espacial de las capas de ASP y registros de presencia
-    asp_contienen_registros = asp.sjoin(registros_presencia, how="left", predicate="contains")
-    # Conteo de registros de presencia en cada ASP
-    asp_registros = asp_contienen_registros.groupby("id").agg(cantidad_registros_presencia = ("gbifID","count"))
-    asp_registros = asp_registros.reset_index() # para convertir la serie a dataframe
+# calcular longitud total
+redvial_x_canton_agrupados['longitud'] = redvial_x_canton_agrupados[['CAMINO DE TIERRA','AUTOPISTA',
+                                                                        'CARRETERA PAVIMENTO DOS VIAS O MAS',
+                                                                        'CARRETERA PAVIMENTO UNA VIA',
+                                                                        'CARRETERA SIN PAVIMENTO DOS VIAS'
+                                                                       ]].sum(axis=1)
 
 
-    #
-    # SALIDAS
-    #
+""" 
+Filtrado de datos según la categoria
+"""
 
-    # Tabla de registros de presencia
-    st.header('Registros de presencia')
-    # st.subheader('st.dataframe()')
-    st.dataframe(registros_presencia[['family', 'species', 'eventDate', 'locality', 'occurrenceID']].rename(columns = {'family':'Familia', 'species':'Especie', 'eventDate':'Fecha', 'locality':'Localidad', 'occurrenceID':'Origen del dato'}))
+#calcular densidad de la categoria dada
+redvial_x_canton_agrupados['densidad'] = redvial_x_canton_agrupados[filtro_categoria].div(redvial_x_canton_agrupados['area'])
+# Muestra usando filtro
+redvial_x_canton_agrupados[["canton", filtro_categoria, "densidad"]]
 
+""" 
+## Gráfico Plotly de Barras
 
-    # Definición de columnas
-    col1, col2 = st.columns(2)
+Gráfico de los 15 cantones de mayor longitud total de red vial filtrados por categoría.
 
-    with col1:
-        # Gráficos de historial de registros de presencia por año
-        st.header('Historial de registros por año')
-        registros_presencia_grp_anio = pd.DataFrame(registros_presencia.groupby(registros_presencia['eventDate'].dt.year).count().eventDate)
-        registros_presencia_grp_anio.columns = ['registros_presencia']
-        # streamlit
-        # st.subheader('st.bar_chart()')
-        # st.bar_chart(registros_presencia_grp_anio)
-        # plotly
-        # st.subheader('px.bar()')
-        fig = px.bar(registros_presencia_grp_anio, 
-                    labels={'eventDate':'Año', 'value':'Registros de presencia'})
-        st.plotly_chart(fig)
+"""
+# Dataframe filtrado para usar en graficación
+longitud_grafico = redvial_x_canton_agrupados[[ 'canton', 
+                                                filtro_categoria
+                                              ]].sort_values(filtro_categoria, ascending=[False]).head(15)
+#Gráfico plotly de barras apiladas 
+fig = px.bar(longitud_grafico, x="canton", y=[filtro_categoria], 
+                                 title="Cantones de mayor longitud total de red vial de la categoría: " + filtro_categoria)
+fig.show()
 
-    with col2:
-        # Gráficos de estacionalidad de registros de presencia por mes
-        st.header('Estacionalidad de registros por mes')
-        registros_presencia_grp_mes = pd.DataFrame(registros_presencia.groupby(registros_presencia['eventDate'].dt.month).count().eventDate)
-        registros_presencia_grp_mes.columns = ['registros_presencia']
-        # streamlit
-        # st.subheader('st.area_chart()')
-        # st.area_chart(registros_presencia_grp_mes)
-        # plotly
-        # st.subheader('px.area()')
-        fig = px.area(registros_presencia_grp_mes, 
-                    labels={'eventDate':'Mes', 'value':'Registros de presencia'})
-        st.plotly_chart(fig)      
+""" 
+## Gráfico Plotly de Pastel
 
+Gráfico de los 15 cantones de mayor longitud total de red vial filtrados por categoría.
 
-    # Gráficos de cantidad de registros de presencia por ASP
-    # "Join" para agregar la columna con el conteo a la capa de ASP
-    asp_registros = asp_registros.join(asp.set_index('id'), on='id', rsuffix='_b')
-    # Dataframe filtrado para usar en graficación
-    asp_registros_grafico = asp_registros.loc[asp_registros['cantidad_registros_presencia'] > 0, 
-                                                            ["nombre_asp", "cantidad_registros_presencia"]].sort_values("cantidad_registros_presencia", ascending=[False]).head(15)
-    asp_registros_grafico = asp_registros_grafico.set_index('nombre_asp')  
+"""
 
-    with col1:
-        st.header('Cantidad de registros por ASP')
-        # streamlit
-        # st.subheader('st.bar_chart()')
-        # st.bar_chart(asp_registros_grafico)    
-        # plotly
-        # st.subheader('px.bar()')
-        fig = px.bar(asp_registros_grafico, 
-                    labels={'nombre_asp':'ASP', 'cantidad_registros_presencia':'Registros de presencia'})
-        st.plotly_chart(fig)    
+#ordenar los valores por longitud
+pastel = redvial_x_canton_agrupados[['canton', filtro_categoria]].sort_values(filtro_categoria, ascending=[False])
+#reset al index
+pastel = pastel.reset_index()
+#extraer la longitud de valor 15
+longitud_15= pastel[filtro_categoria].loc[14]
+#cambiar el canton a los siguientes valores luego del 15
+pastel.loc[pastel[filtro_categoria] < longitud_15 , 'canton'] = 'Otros cantones' 
+#Gráfico plotly de pastel 
+fig = px.pie(pastel, values=filtro_categoria, names='canton', title='Porcentaje de los 15 cantones de mayor longitud de la categoría: '+ filtro_categoria +' de la red vial en el país')
+fig.show()
 
-    with col2:        
-        # st.subheader('px.pie()')        
-        st.header('Porcentaje de registros por ASP')
-        fig = px.pie(asp_registros_grafico, 
-                    names=asp_registros_grafico.index,
-                    values='cantidad_registros_presencia')
-        fig.update_traces(textposition='inside', textinfo='percent+label')
-        st.plotly_chart(fig)    
+""" 
+## Mapa folium 
+Un mapa folium con las siguientes capas:
+* Capa base (OpenStreetMap, Stamen, etc.).
+* Capa de coropletas correspondiente a la densidad de la red vial en los cantones.
+* Líneas de la red vial.
 
-    # Mapa de registros de presencia
-    st.header('Mapa de registros de presencia')
-    # st.subheader('st.map()')
-    st.map(registros_presencia.rename(columns = {'decimalLongitude':'longitude', 'decimalLatitude':'latitude'}))
+Y los siguientes controles:
+* Control para activar y desactivar capas.
+* Escala
+"""
+cantones_file = cantones_file.to_crs(4326)
+redvial_file = redvial_file.to_crs(4326)
 
-    with col1:
-        # Mapa de calor y de registros agrupados
-        st.header('Mapa de calor y de registros agrupados')
-        # st.subheader('folium.plugins.HeatMap(), folium.plugins.MarkerCluster()')    
-        # Capa base
-        m = folium.Map(location=[9.6, -84.2], tiles='CartoDB dark_matter', zoom_start=8)
-        # Capa de calor
-        HeatMap(data=registros_presencia[['decimalLatitude', 'decimalLongitude']],
-                name='Mapa de calor').add_to(m)
-        # Capa de ASP
-        folium.GeoJson(data=asp, name='ASP').add_to(m)
-        # Capa de registros de presencia agrupados
-        mc = MarkerCluster(name='Registros agrupados')
-        for idx, row in registros_presencia.iterrows():
-            if not math.isnan(row['decimalLongitude']) and not math.isnan(row['decimalLatitude']):
-                mc.add_child(Marker([row['decimalLatitude'], row['decimalLongitude']], 
-                                    popup=row['species']))
-        m.add_child(mc)
-        # Control de capas
-        folium.LayerControl().add_to(m)    
-        # Despliegue del mapa
-        folium_static(m)
+capa_mapa = redvial_x_canton_agrupados[['canton', 'densidad']]
+# Creación del mapa base
+mapa= folium.Map(
+    location=[9.8, -84], 
+    width=1000, height=1000, 
+    zoom_start=8,
+    control_scale=True,
+    tiles='Stamen Watercolor'
+    )
 
-    with col2:
-        # Mapa de coropletas de registros de presencia en ASP
-        st.header('Mapa de cantidad de registros en ASP')
-        # st.subheader('folium.Choropleth()')    
-        # Capa base
-        m = folium.Map(location=[9.6, -84.2], tiles='CartoDB positron', zoom_start=8)
-        # Capa de coropletas
-        folium.Choropleth(
-            name="Cantidad de registros en ASP",
-            geo_data=asp,
-            data=asp_registros,
-            columns=['id', 'cantidad_registros_presencia'],
-            bins=8,
-            key_on='feature.properties.id',
-            fill_color='Reds', 
-            fill_opacity=0.5, 
-            line_opacity=1,
-            legend_name='Cantidad de registros de presencia',
-            smooth_factor=0).add_to(m)
-        # Control de capas
-        folium.LayerControl().add_to(m)        
-        # Despliegue del mapa
-        folium_static(m)   
+#Añadir mapa de coropletas
+folium.Choropleth(
+    name="Densidad de la red vial en los cantones de Costa Rica",
+    geo_data=cantones_file,
+    data=capa_mapa,
+    columns=['canton', 'densidad'],
+    bins=8,
+    key_on='feature.properties.canton',
+    fill_color='Reds', 
+    fill_opacity=0.5, 
+    line_opacity=1,
+    legend_name='densidad',
+    smooth_factor=0 ).add_to(mapa)
+
+#añadir capa con las lineas de red vial
+folium.GeoJson(data=redvial_file, name='Red vial').add_to(mapa)
+
+# Control de capas
+folium.LayerControl().add_to(mapa)
+
+# Despliegue del mapa
+mapa
