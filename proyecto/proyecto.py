@@ -15,30 +15,16 @@ Stephanie María Leitón Ramírez - B74106
 ##Importando las bibliotecas
 """
 
-import os
-import requests
-import zipfile
-import csv
-from functools import partial
-from shapely.geometry import Point, mapping, shape
-from shapely.ops import transform
-from owslib.wfs import WebFeatureService
-from geojson import dump
-import fiona
-import fiona.crs
 import math
 import folium
 import geopandas as gpad
 import pandas as pd
-import contextily as cx
-import matplotlib.pyplot as plt
-# %matplotlib inline
 import plotly.express as px
 from folium import Marker
 from folium.plugins import MarkerCluster
 from folium.plugins import HeatMap
 import streamlit as st
-
+from streamlit_folium import folium_static
 #
 # Configuración de la página
 #
