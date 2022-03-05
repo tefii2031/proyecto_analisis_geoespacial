@@ -46,8 +46,8 @@ https://www.snitcr.go.cr/ico_servicios_ogc_info?k=bm9kbzo6NDI=&nombre=IGN%201:20
 #
 # Cargar datos
 #
-redvial_file = gpad.read_file('../datos/redvial.geojson')
-cantones_file = gpad.read_file('../datos/cantones.geojson')
+redvial_file = gpad.read_file('redvial.geojson')
+cantones_file = gpad.read_file('cantones.geojson')
 #convertir capas
 redvial_file.to_crs(5367)
 cantones_file.to_crs(5367)
