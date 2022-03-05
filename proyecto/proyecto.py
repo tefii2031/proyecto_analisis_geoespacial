@@ -18,6 +18,7 @@ Stephanie María Leitón Ramírez - B74106
 import math
 import streamlit as st
 import pandas as pd
+import geopandas as gpad
 
 #
 # Configuración de la página
