@@ -20,8 +20,8 @@ import requests
 import zipfile
 import csv
 from functools import partial
-from shapely.geometry import Point, mapping, shape
-from shapely.ops import transform
+#from shapely.geometry import Point, mapping, shape
+#from shapely.ops import transform
 from owslib.wfs import WebFeatureService
 from geojson import dump
 import fiona
